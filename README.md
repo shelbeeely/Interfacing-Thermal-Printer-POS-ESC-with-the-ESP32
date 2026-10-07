@@ -1,11 +1,11 @@
-# ESP32 Thermal Printer Interface
+# XIAO ESP32S3 Thermal Printer Interface
 
 
-![ESP32 Thermal Printer](https://img.shields.io/badge/ESP32-Thermal%20Printer-blue?style=for-the-badge&logo=espressif)
+![XIAO ESP32S3 Thermal Printer](https://img.shields.io/badge/XIAO%20ESP32S3-Thermal%20Printer-blue?style=for-the-badge&logo=espressif)
 ![Arduino IDE](https://img.shields.io/badge/Arduino%20IDE-Compatible-green?style=for-the-badge&logo=arduino)
 ![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
 
-**Interface PNP-500/RS203 Thermal Printers with ESP32 Microcontroller**
+**Interface ESC/POS TTL Thermal Printers with the Seeed Studio XIAO ESP32S3 Sense**
 
 *Print Receipts • QR Codes • Barcodes • Images • Text*
 
@@ -19,31 +19,40 @@
 
 ## 🚀 Overview
 
-This project demonstrates how to interface thermal printers (PNP-500/RS203) with ESP32 microcontrollers for creating IoT-enabled printing solutions. Perfect for building POS systems, receipt printers, inventory management, and embedded printing applications.
+This project shows how to drive an ESC/POS thermal receipt printer from a microcontroller to build IoT printing projects: POS systems, receipt printers, inventory tags and other embedded printing applications.
+
+> **2026 update:** The sketches now target the **[Seeed Studio XIAO ESP32S3 Sense](https://wiki.seeedstudio.com/xiao_esp32s3_getting_started/)** (ESP32-S3R8: dual-core 240 MHz, 8 MB PSRAM, 8 MB flash, native USB-C). They build on the current Arduino-ESP32 3.x core. The recommended printer is the **DFRobot Embedded Thermal Printer V2.0 (DFR0503-EN)**, which is still in stock. The PNP-500/RS203 used in the original tutorial works unchanged. The two Adafruit TTL printers that most older tutorials use are now discontinued.
 
 ### ✨ Key Features
 
 - **Multiple Print Formats**: Text, Images, QR Codes, Barcodes (CODE128, UPC-A, EAN13)
 - **Professional Output**: High-quality 8 dots/mm resolution printing
 - **Easy Integration**: Simple UART communication interface
-- **Memory Optimized**: Efficient bitmap processing for ESP32 constraints
+- **Memory Optimized**: Efficient bitmap processing, with 8 MB PSRAM available on the ESP32-S3R8
 - **Customizable**: Adjustable darkness, alignment, and formatting options
 - **Real-world Ready**: Includes GST invoice printing example
 
-## 🛠️ Hardware Requirements
+## 🛒 Bill of Materials (2026)
 
-| Component | Quantity | Purpose |
-|-----------|----------|---------|
-| ESP32 Development Board | 1 | Main microcontroller |
-| PNP-500 or RS203 Thermal Printer | 1 | Printing device |
-| 1KΩ Resistors | 2 | Pull-up resistors for signal stability |
-| Push Buttons | 2 | Demo triggers (optional) |
-| 2S Li-Ion Battery (7.4V) | 1 | Printer power supply |
-| Breadboard & Jumper Wires | - | Circuit assembly |
+| Component | Qty | Where to get it | Notes |
+|-----------|-----|-----------------|-------|
+| [Seeed Studio XIAO ESP32S3 Sense](https://www.seeedstudio.com/XIAO-ESP32S3-Sense-p-5639.html) | 1 | Seeed Studio (SKU 113991115, US$13.99, in stock Oct 2026), Digi-Key, Mouser | ESP32-S3R8 with camera/mic/microSD expansion board. The plain XIAO ESP32S3 also works with the same pins. |
+| [DFRobot Embedded Thermal Printer V2.0 (DFR0503-EN)](https://www.dfrobot.com/product-1799.html) | 1 | DFRobot (US$39, in stock Oct 2026), [RobotShop](https://www.robotshop.com/products/dfrobot-embedded-thermal-printer-ttl-serial), [Core Electronics](https://core-electronics.com.au/embedded-thermal-printer-ttl-serial.html) | TTL + USB + RS485 + RS232, ESC/POS, 9600 baud, 203 DPI / 384 dots, 58 mm paper. [Wiki](https://wiki.dfrobot.com/dfr0503-en/) |
+| 12 V ≥ 2 A DC power supply | 1 | Any | The V2.0 printer is rated 9–24 V DC at 0.5–2.5 A. Check the label on your unit, because the original V1 board was rated 5–9 V. |
+| 58 mm thermal paper rolls | 1+ | Any office supplier | Roll diameter ≤ 30 mm for the DFR0503 |
+| Push buttons | 2 | Any | Demo triggers (optional) |
+| USB-C cable | 1 | Any | Power and programming for the XIAO |
+| Jumper wires | - | Any | |
 
-## 📋 Supported Thermal Printers
+### Alternative printers
 
-### PNP-500 Specifications
+Any 58 mm ESC/POS printer with a **TTL serial** input should work. Set `PRINTER_BAUD` in the sketch to the baud rate printed on the printer's self-test page.
+
+- **Generic 58 mm embedded panel printer modules** (sold on Amazon/eBay/AliExpress as "58mm embedded thermal receipt printer USB/RS232/TTL", e.g. [Maikrt](https://www.amazon.com/Maikrt-Embedded-Thermal-Printing-Commands/dp/B07PX9NYR3)). These are cheaper, usually run from 5–9 V, and default to 9600 baud. Quality and documentation vary between sellers.
+- **PNP-500 / RS203**, the printer from the original tutorial. Its specs are below.
+- **Adafruit Mini (#597) and Tiny (#2751) thermal printers**: discontinued. If you already own one, it still works. Note that the Mini runs at 19200 baud.
+
+### PNP-500 Specifications (original printer)
 - **Print Method**: Direct thermal line printing
 - **Paper Width**: 57mm thermal paper
 - **Print Width**: 48mm effective area
@@ -54,23 +63,32 @@ This project demonstrates how to interface thermal printers (PNP-500/RS203) with
 - **Dimensions**: 76.8×77.4×47.6mm (W×D×H)
 - **Print Head Life**: Up to 50km of printing
 
-## 🔌 Circuit Diagram
+## 🔌 Wiring (XIAO ESP32S3 Sense)
 
 ```
-ESP32 GPIO Pins → Thermal Printer
-GPIO16 (RX2)   → TTL TX
-GPIO17 (TX2)   → TTL RX  
-GPIO5  (GND)   → Signal GND (with 1KΩ pulldown)
-GPIO21 (VCC)   → Signal VCC (with 1KΩ pullup)
-GPIO22         → Button 1 (Print Next Image)
-GPIO23         → Button 2 (Print Demo Page)
+XIAO ESP32S3 Sense          Thermal Printer (TTL connector)
+D6 / GPIO43 (TX)   ──────►  RX
+D7 / GPIO44 (RX)   ◄─ ─ ─   TX   (optional: see logic-level note)
+GND                ──────►  GND
 
-Power Supply:
-7.4V Li-Ion    → Printer VCC
-Common GND     → All GND connections
+D0 / GPIO1         ── Button 1 ── GND   (Print next image)
+D1 / GPIO2         ── Button 2 ── GND   (Print demo page)
+
+Power:
+12V DC supply (+)  ──────►  Printer power VIN
+12V DC supply (−)  ──────►  Printer power GND ── XIAO GND (common ground)
+USB-C              ──────►  XIAO (power + Serial Monitor)
 ```
 
-> **⚠️ Important**: Use 6V+ for optimal printing quality. 5V may result in light/poor image prints.
+- **Common ground is required.** The printer's supply ground and the XIAO's GND must be connected.
+- **Don't power the printer from the XIAO.** The print head draws 1.5–2.5 A peaks, far more than the XIAO's 5V pin can supply.
+- **Logic levels.** The XIAO's 3.3 V TX output drives the TTL RX input of these printers directly. The printer's TX line may be 5 V, and **ESP32-S3 GPIOs are not 5 V tolerant**. The sketches never read from the printer, so you can leave printer TX unconnected. If you want status read-back, add a bidirectional level shifter (BSS138-type).
+- **Pin choice on the Sense.** D0–D7 are free. The Sense expansion board's microSD slot uses D8–D10 and GPIO21, and GPIO21 is also the onboard user LED. The camera and mic use internal pins that aren't broken out. With this wiring the camera, mic and microSD stay available.
+- No pull-up resistors and no GPIO "power" pins are needed. The original ESP32 build drove GPIO5/GPIO21 as signal GND/VCC; on the XIAO, use the real GND pin.
+
+> **ℹ️ Note:** The circuit-diagram images in `Images/` show the original ESP32 DevKit + PNP-500 build. For the XIAO, use the pin mapping above.
+
+> **⚠️ Important**: Under-powering the printer causes light or streaky image prints. Use a supply that meets the printer's rating (12 V for the DFR0503 V2.0, 6 V+ for the PNP-500).
 
 ## 🖥️ Software Features
 
@@ -120,13 +138,27 @@ Control the printer via Serial Monitor with these commands:
    git clone https://github.com/Circuit-Digest/Interfacing-Thermal-Printer-POS-ESC-with-the-ESP32.git
    ```
 
-2. Open the project in Arduino IDE
+2. In Arduino IDE 2.x, open **File → Preferences** and add this Board Manager URL:
+   ```
+   https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+   ```
 
-3. Install required libraries:
-   - ESP32 Board Package
-   - Arduino Core Libraries (included)
+3. In **Boards Manager**, install **esp32 by Espressif Systems** (3.x; tested with 3.3.12).
 
-4. Upload the code to your ESP32
+4. Open `Code/ESP32_Thermal_Printer_Interfacing/ESP32_Thermal_Printer_Interfacing.ino` and select:
+   - **Board**: `XIAO_ESP32S3`
+   - **PSRAM**: `OPI PSRAM` (enables the 8 MB PSRAM on the ESP32-S3R8)
+   - **USB CDC On Boot**: `Enabled` (the default; routes `Serial` to the USB-C port)
+
+5. Upload. If the board isn't detected, hold **BOOT**, tap **RESET**, release **BOOT**, then upload again.
+
+   Or with `arduino-cli`:
+   ```bash
+   arduino-cli compile -b esp32:esp32:XIAO_ESP32S3:PSRAM=opi Code/ESP32_Thermal_Printer_Interfacing
+   arduino-cli upload  -b esp32:esp32:XIAO_ESP32S3:PSRAM=opi -p /dev/ttyACM0 Code/ESP32_Thermal_Printer_Interfacing
+   ```
+
+6. If the printout is garbled, check the baud rate on the printer's self-test page (hold the FEED button while powering on) and update `PRINTER_BAUD` in the sketch.
 
 ### 3. Testing
 1. Open Serial Monitor (115200 baud)
@@ -165,8 +197,8 @@ const BitmapImage availableImages[] = {
 
 ## 📱 Button Functions
 
-- **Button 1 (GPIO22)**: Cycle through available images
-- **Button 2 (GPIO23)**: Print comprehensive demo page with all formats
+- **Button 1 (D0 / GPIO1)**: Cycle through available images
+- **Button 2 (D1 / GPIO2)**: Print comprehensive demo page with all formats
 
 ## 🧠 Technical Details
 
@@ -182,13 +214,14 @@ The printer uses standard ESC/POS commands for control:
 - **PROGMEM Storage**: Images stored in flash memory to preserve RAM
 - **Chunked Processing**: Large images processed in 24-line chunks
 - **Dynamic Allocation**: Temporary buffers for image rotation and processing
-- **Memory Monitoring**: Built-in heap usage tracking and reporting
+- **Memory Monitoring**: Built-in heap and PSRAM usage tracking and reporting
+- **PSRAM**: With `OPI PSRAM` enabled, large image buffers are allocated from the ESP32-S3R8's 8 MB PSRAM
 
 ### Print Quality Optimization
 - **Darkness Control**: Adjustable from 50% to 205% in 5% steps
 - **Heat Timing**: Configurable break delays (0-1750μs)
 - **Paper Feed**: Precise line spacing control
-- **Signal Integrity**: Pull-up resistors for noise reduction
+- **Signal Integrity**: Keep the UART wires short and share a solid ground with the printer supply
 
 ## 🔧 Troubleshooting
 
@@ -196,9 +229,12 @@ The printer uses standard ESC/POS commands for control:
 
 | Problem | Cause | Solution |
 |---------|-------|----------|
-| Light/faded prints | Low voltage supply | Use 6V+ power supply |
+| Light/faded prints | Low voltage supply | Use a supply that meets the printer's rating (12 V for DFR0503 V2.0, 6 V+ for PNP-500) |
 | Blurry images | Print head contamination | Clean with isopropyl alcohol |
-| No output | Wrong wiring | Check TTL connections and power |
+| No output | Wrong wiring | Check that XIAO D6 goes to printer RX, that grounds are common, and that the printer has power |
+| Garbled characters | Baud rate mismatch | Read the baud rate off the self-test page and set `PRINTER_BAUD` |
+| Nothing in Serial Monitor | USB CDC disabled | Set **USB CDC On Boot: Enabled** and re-upload |
+| XIAO resets while printing | Shared/weak supply | Power the printer from its own supply, not the XIAO |
 | Memory errors | Large images | Reduce image size or increase chunk processing |
 | Paper jam | Wrong paper type | Use 57mm thermal paper |
 
@@ -229,12 +265,14 @@ The printer uses standard ESC/POS commands for control:
 ## 🏗️ Project Structure
 
 ```
-├── ESP32_Thermal_Printer.ino    # Main Arduino sketch
-├── data.h                       # Bitmap image data
-├── DOC/
-│   └── User Manual PNP-500.pdf  # Printer documentation
-├── images/                      # Sample images for testing
-└── README.md                    # This file
+├── Code/
+│   ├── ESP32_Thermal_Printer_Interfacing/        # Main demo sketch (serial commands + buttons)
+│   │   ├── ESP32_Thermal_Printer_Interfacing.ino
+│   │   └── data.h                                # Bitmap image data
+│   └── ESP32_Thermal_Printer_Invoice_Printing/   # GST invoice printing example
+├── DOC/                                          # PNP-500 manual and leaflet
+├── Images/                                       # Tutorial images (original ESP32 build)
+└── README.md                                     # This file
 ```
 
 ## ⚡ Advanced Features
@@ -284,4 +322,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🏷️ Tags
 
-`ESP32` `Thermal-Printer` `POS` `ESC-POS` `Receipt-Printer` `QR-Code` `Barcode` `IoT` `Arduino` `Microcontroller` `PNP-500` `RS203` `Embedded-Systems` `Print-Technology`
+`ESP32` `ESP32-S3` `XIAO-ESP32S3` `Seeed-Studio` `DFR0503` `Thermal-Printer` `POS` `ESC-POS` `Receipt-Printer` `QR-Code` `Barcode` `IoT` `Arduino` `Microcontroller` `PNP-500` `RS203` `Embedded-Systems` `Print-Technology`

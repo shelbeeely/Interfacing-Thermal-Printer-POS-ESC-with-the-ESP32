@@ -1,8 +1,9 @@
 /*
- * Thermal Printer Controller for ESP32
+ * Thermal Printer Controller for the Seeed Studio XIAO ESP32S3 Sense
  * 
  * Author: Rithik Krisna M / CircuitDigest.com
  * Date: August/2025
+ * Updated: October/2026 - ported to the XIAO ESP32S3 Sense (ESP32-S3R8)
  * 
  * Purpose:
  * This code controls a thermal printer via ESP32, providing various printing capabilities
@@ -30,10 +31,17 @@
  * 4. Implements rotation for upside-down printing
  * 5. Offers demo modes to showcase all printer capabilities
  * 
- * Hardware Connections:
- * - Printer connected via UART2 (pins 16/RXD2, 17/TXD2)
- * - Power control on pin 21 (Vcc) and 5 (GND)
- * - Buttons on pins 22 (Key1) and 23 (Key2)
+ * Hardware Connections (XIAO ESP32S3 Sense):
+ * - XIAO D6 (GPIO43, TX) -> printer TTL RX
+ * - XIAO D7 (GPIO44, RX) <- printer TTL TX (optional, see README - the
+ *   sketch never reads from the printer, so this can be left unconnected)
+ * - XIAO GND -> printer TTL GND and printer power supply GND
+ * - Buttons on D0/GPIO1 (Key1) and D1/GPIO2 (Key2), wired to GND
+ *
+ * Arduino IDE board settings:
+ * - Board: "XIAO_ESP32S3" (esp32 by Espressif Systems, core 3.x)
+ * - PSRAM: "OPI PSRAM" (enables the 8MB PSRAM on the ESP32-S3R8)
+ * - USB CDC On Boot: "Enabled" (so Serial goes to the USB-C port)
  * 
  * Serial Commands:
  * Type 'HELP' for full list of available commands
@@ -71,21 +79,20 @@ const BitmapImage availableImages[] = {
 // Calculate number of available images at compile time
 const int numAvailableImages = sizeof(availableImages) / sizeof(availableImages[0]);
 
-// Hardware pin definitions for ESP32
-#define RXD2 16  // UART2 RX pin for printer communication
-#define TXD2 17  // UART2 TX pin for printer communication
-
-// Control pins for printer power management
-#define GND 5    // Always LOW - printer ground control
-#define DTRD 4   // Not used in current implementation
-#define Vcc 21   // Always HIGH - printer power control
+// Hardware pin definitions for the XIAO ESP32S3 Sense.
+// D0-D7 are free on the Sense; D8-D10 and GPIO21 are shared with the
+// expansion board's microSD slot, so avoid them if you use the SD card.
+#define PRINTER_RX 44  // D7 - UART1 RX (from printer TX, optional)
+#define PRINTER_TX 43  // D6 - UART1 TX (to printer RX)
+#define PRINTER_BAUD 9600  // Check your printer's self-test page if output is garbled
 
 // Button input pins with internal pullup
-#define Key1 22  // Button 1 - cycles through images
-#define Key2 23  // Button 2 - prints demo page
+#define Key1 1   // D0 - Button 1 - cycles through images
+#define Key2 2   // D1 - Button 2 - prints demo page
 
-// Serial communication setup
-HardwareSerial printerSerial(2);  // Use UART2 for printer communication
+// Serial communication setup. Serial is the native USB-C port on the XIAO,
+// so UART1 is free for the printer.
+HardwareSerial printerSerial(1);
 
 // Constants for memory and performance optimization
 const int IMAGE_WIDTH = 200;   // Default image width (not currently used)
@@ -116,7 +123,11 @@ void printMemoryStats(const char* tag) {
   Serial.print(" | MaxAllocHeap: ");
   Serial.print(ESP.getMaxAllocHeap());
   Serial.print(" | HeapSize: ");
-  Serial.println(ESP.getHeapSize());
+  Serial.print(ESP.getHeapSize());
+  Serial.print(" | FreePSRAM: ");
+  Serial.print(ESP.getFreePsram());
+  Serial.print(" / ");
+  Serial.println(ESP.getPsramSize());
 
 }
 
@@ -130,19 +141,14 @@ void setGlobalUpsideDown(bool enable) {
 
 // Arduino setup function - runs once at startup
 void setup() {
-  // Configure power control pins for printer
-  pinMode(GND, OUTPUT);
-  pinMode(Vcc, OUTPUT);
-  digitalWrite(GND, LOW);   // Ensure ground is always low
-  digitalWrite(Vcc, HIGH);  // Ensure power is always high
-
   // Configure button input pins with internal pullup resistors
   pinMode(Key1, INPUT_PULLUP);
   pinMode(Key2, INPUT_PULLUP);
 
   // Initialize serial communications
-  Serial.begin(115200);                               // Debug monitor at high speed
-  printerSerial.begin(9600, SERIAL_8N1, RXD2, TXD2); // Printer at standard thermal printer baud rate
+  Serial.begin(115200);                               // Debug monitor over native USB
+  while (!Serial && millis() < 3000) delay(10);       // Wait briefly for the USB serial monitor
+  printerSerial.begin(PRINTER_BAUD, SERIAL_8N1, PRINTER_RX, PRINTER_TX);
 
   delay(1000);  // Give printer time to initialize
 
