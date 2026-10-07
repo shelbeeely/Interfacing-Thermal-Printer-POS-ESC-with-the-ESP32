@@ -746,4 +746,4 @@ void printBitmapGS_Method(const unsigned char* progmemData, int width, int heigh
       }
     }
   }
-}
+}
