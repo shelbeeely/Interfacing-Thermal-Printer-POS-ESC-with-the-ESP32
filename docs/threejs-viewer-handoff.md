@@ -1,4 +1,4 @@
-# Handoff prompt: three.js viewer for the gesture sticker camera
+# Handoff prompt: three.js viewer for the X4 sticker printer
 
 Copy everything below the line into a new session.
 
@@ -6,110 +6,125 @@ Copy everything below the line into a new session.
 
 ## Task
 
-Build an interactive **three.js 3D viewer** of a hardware build I'm about to assemble: a **gesture-triggered thermal sticker camera**. It should show every component at true scale, how they connect, and a rough enclosure. I'll use it to plan the physical layout before buying and cutting anything.
+Build an interactive **three.js 3D viewer** of a hardware device I'm about to build: a **single handheld enclosure that combines an Xteink X4 e-paper reader with a thermal sticker printer**.
+- The X4's e-paper screen is the user interface. It browses **preset stickers stored on its microSD card**, previews them, and sends the chosen one to print.
+- A small controller board inside the case receives the image wirelessly and drives the printer.
 
-Deliver a **single self-contained `index.html`**. Load three.js and its addons (`OrbitControls`, `CSS2DRenderer`) as ES modules from `cdn.jsdelivr.net/npm/three@<latest>` through an import map. Don't use a build step. Use **1 scene unit = 1 mm**.
+I'll use the viewer to plan the case layout before 3D-printing it.
 
-## What the device does (for context)
+Deliver a **single self-contained `index.html`**. Load three.js and its addons (`OrbitControls`, `CSS2DRenderer`, `GLTFExporter`, `GLTFLoader`, `RoomEnvironment`) as ES modules from `cdn.jsdelivr.net/npm/three@<latest>` through an import map. Don't use a build step. Use **1 scene unit = 1 mm**.
 
-1. An **Arducam IMX500 AI camera** runs a hand-pose model on the sensor itself and sends keypoints to the main board over SPI.
-2. A **Waveshare ESP32-P4-WIFI6** board recognizes gestures. A ✌️ peace sign starts a countdown and takes a photo, 👍 prints it, and ✋ discards it. The board receives the photo over MIPI-CSI and shows a preview on a **DSI touchscreen**.
-3. The P4 dithers the photo to 1-bit at **384 px wide** and sends it over TTL serial to a **DFRobot DFR0503 thermal printer** loaded with **57 mm sticker paper**.
+## How the device works (for context)
+
+1. **Xteink X4** (ESP32-C3, 4.3" 480×800 e-paper, 220 PPI) runs custom firmware based on the open-source CrossPoint Reader. A "Stickers" app:
+   - lists `/stickers/**/*.bmp` on the X4's own microSD card. These are 1-bit, pre-dithered, ≤ 384 px wide.
+   - shows a pixel-for-pixel preview (384 px ≈ 44 mm on screen vs 48 mm printed).
+   - on the print button, sends the 1-bit image over **ESP-NOW** to the controller. 384 × 800 px is ≈ 38 KB, which takes about a second.
+2. **Seeed XIAO ESP32S3 Sense** inside the case receives the image and prints it over TTL serial using the ESC/POS raster command `GS v 0`. Its Sense camera is optional, for photo stickers previewed on the X4.
+3. **DFRobot DFR0503 V2.0 thermal printer** prints on **57 mm × 30 mm Ø sticker rolls**, at 384 dots = 48 mm print width.
+4. **Power:** a USB-C PD trigger board set to **15 V** feeds the printer (rated 9–24 V, 0.5–2.5 A). A small buck converter gives 5 V to the XIAO. The X4 keeps its own 650 mAh battery and charges through its own USB-C port.
 
 ## Components
 
-Put all dimensions in one `PARTS` config object at the top of the file. Each part gets a `verified: true|false` flag. Draw unverified parts with a dashed outline edge and an "unverified size" badge in the info panel, so I know what to measure. Each part also gets an optional `modelUrl`: if set, load that GLB with `GLTFLoader` in place of the simple shapes, so I can drop in real CAD later.
+Put all dimensions in one `PARTS` config object at the top of the file. Each part gets a `verified: true|false` flag. Draw unverified parts with a dashed outline edge and an "unverified size" badge in the info panel. Each part also gets an optional `modelUrl`: if set, load that GLB in place of the simple shapes.
 
 | id | Part | Dimensions (mm) | Verified | Modeling notes |
 |---|---|---|---|---|
-| `printer` | DFRobot Embedded Thermal Printer V2.0 (DFR0503-EN) | Overall **82 × 58 × 44**; panel/install body **77 × 53 × 42** | ✅ (DFRobot spec) | Rectangular body with a front bezel flange (82 × 58) and a body behind it (77 × 53 × 42). Hinged paper door on top. Paper slot on the front face, 58 mm wide. Inside: a paper roll as a cylinder **57 mm long, ≤ 30 mm diameter**. Print area 48 mm, centered. Connectors (power + TTL) on the back face; exact position unverified. |
-| `paper` | 57 × 30 mm thermal sticker roll | 57 wide × 30 Ø | ✅ | Paper strip exits the front slot. Animate it (see Features). |
-| `p4` | Waveshare ESP32-P4-WIFI6 | **≈ 85 × 56 × 1.6** PCB, Raspberry Pi HAT–style layout | ❌ (assumed from its Pi-compatible 40-pin header; confirm against Waveshare's dimension drawing) | Green PCB. Components: 2×20 pin header along one long edge; USB-C (power/program); USB OTG HS 4-pin header; MIPI-CSI FPC connector; MIPI-DSI FPC connector; TF card slot; ESP32-C6-MINI-1 module (≈ 13 × 16.6 mm) as the Wi-Fi co-processor; MX1.25 speaker header. Four M2.5 mounting holes, Pi-style (58 × 49 mm pattern), assumed. |
-| `camera` | Arducam IMX500 AI Camera for MCU (B0642) | Board **34 × 34**, depth **24.5** excluding lens | ✅ (Arducam datasheet) | Square stacked board. Front **M12 lens**: cylinder ≈ 14 Ø × 15 long (lens size unverified). Back: 22-pin MIPI FPC connector, SPI & I2C connector, USB-C. 3.3 V, 0.5 W, 8.4 g. FOV 82° D / 72° H / 56° V: draw the view cone as a toggleable translucent frustum. |
-| `display` | Waveshare MIPI-DSI touchscreen | Parameter: **5", 7" or 10.1"** (dropdown) | ❌ except 10.1": outline **147 × 239**, active area **135.36 × 216.58**, 800 × 1280 | Thin slab with a bezel and active area. Default to **5"** (outline ≈ 121 × 76 × 5, unverified). Note: Waveshare's kit B may ship the 10.1", which is far too big for a handheld build. |
-| `psu` | 12 V ≥ 2 A DC barrel input | Panel jack: 12 Ø × 15 | ❌ | Printer power input. Mount the jack on the enclosure back. |
-| `buttons` | 2 × 12 mm tactile buttons (manual fallback: shutter, print) | 12 × 12 × 7 | ❌ | Optional; toggle in the UI. |
+| `x4` | Xteink X4 e-reader | **114 × 69 × 5.9**, 77 g | ✅ (published spec) | Slab with rounded corners (radius ≈ 6, unverified). Screen: 4.3" active area ≈ 56 × 94 (unverified; derive from 480×800 at 220 PPI: 55.4 × 92.4). Show the screen as a CanvasTexture: the e-paper UI and the sticker preview. Features to keep reachable (positions **unverified**; mark them as "measure your unit"): USB-C port, microSD slot (deeply recessed, needs a pin to eject), power button, page-turn buttons. |
+| `printer` | DFRobot Embedded Thermal Printer V2.0 (DFR0503-EN) | Overall **82 × 58 × 44**; panel/install body **77 × 53 × 42** | ✅ (DFRobot spec) | Front bezel flange 82 × 58 with the body behind it. Paper slot in the front face, 58 wide. Hinged paper door. Inside: a paper roll cylinder **57 long × 30 Ø**. Power and TTL connectors on the back face (position unverified). |
+| `xiao` | Seeed XIAO ESP32S3 Sense | **21 × 17.8** PCB; ≈ 15 tall with the Sense camera board stacked | ✅ footprint / ❌ stack height | Tiny PCB, USB-C on one short edge. Optional camera module on top: toggle it, and give it a lens hole in the case. |
+| `pd` | USB-C PD trigger board (15 V) | ≈ 25 × 12 × 6 | ❌ | Its USB-C port is the device's main power input; give it a case cutout. |
+| `buck` | 15 V → 5 V buck module (Mini-360 class) | ≈ 22 × 17 × 4 | ❌ | |
+| `paper` | Sticker strip | 57 wide × 0.1 | ✅ | Animated (see Features). |
+| `button` | Optional 12 mm tactile "feed" button | 12 × 12 × 7 | ❌ | Toggle. |
+
+**Hard rule to show in the UI:** check the printer's label before wiring. A **V1 board is rated 5–9 V, and 15 V would destroy it**. Only the V2.0 (9–24 V) takes the 15 V PD input.
 
 ## Wiring (draw as colored tube curves)
 
-Use `CatmullRomCurve3` + `TubeGeometry`, about 1 mm diameter for wires and flat ribbons for FFCs. Color by function, add a legend, and toggle each group.
+Use `CatmullRomCurve3` + `TubeGeometry`, about 1 mm diameter. Color by function, add a legend, and toggle each group.
 
-| From | To | Type | Color |
-|---|---|---|---|
-| P4 40-pin header UART TX (GPIO TBD) | Printer TTL **RX** | wire | yellow |
-| P4 GND | Printer TTL GND **and** PSU GND (common ground) | wire | black |
-| Printer TTL TX | *leave unconnected*; show as a dangling stub labeled "not used: printer TX may be 5 V, ESP32 pins aren't 5 V tolerant" | wire | gray dashed |
-| Camera 22-pin MIPI | P4 MIPI-CSI (15-pin) | **15–22-pin FFC, 15 cm**, which Arducam includes | ribbon, orange |
-| Camera SPI (SCLK, MOSI, MISO, CS) + I2C (SDA, SCL) + 3V3 + GND | P4 40-pin header (GPIOs TBD from Arducam's `imx500-mcu-sdk` ESP32-P4 README) | wire bundle | blue (SPI), green (I2C), red (3V3) |
-| Display | P4 MIPI-DSI | FFC ribbon | orange |
-| 12 V PSU | Printer power input | wire pair | red / black |
-| USB-C 5 V | P4 USB-C | cable stub | gray |
+| From | To | Color |
+|---|---|---|
+| PD board V+ (15 V) | Printer power + **and** buck input | red |
+| PD board GND | Printer power GND, buck GND, XIAO GND (common ground) | black |
+| Buck 5 V out | XIAO 5V pin | orange |
+| XIAO D6 / GPIO43 (TX) | Printer TTL RX | yellow |
+| Printer TTL TX | **leave unconnected**; dangling stub labeled "printer TX may be 5 V, ESP32 pins aren't 5 V tolerant" | gray dashed |
+| XIAO D0 / GPIO1 | Feed button → GND | green |
+| X4 ⇄ XIAO | **No wire:** draw an animated dotted "ESP-NOW" arc between them | cyan dotted |
 
-Rule to show in the info panel: **never power the printer from the P4.** It needs its own 12 V supply because it draws 0.5–2.5 A peaks.
+## Layout presets (store in a `LAYOUT` object, switchable in the UI)
 
-## Default layout (adjustable)
+**A — "Instant camera" (portrait).** X4 in portrait on the front face. The printer sits behind the X4's top half, rotated so its paper slot points **up** and stickers come out the top edge. The XIAO, PD board and buck sit in the space below the printer. Target outer size ≈ **92 × 75 × 125 mm** (W × D × H).
 
-A handheld or desk "instant camera" box:
-- Display on the **back face**, facing the user.
-- Camera on the **front face**, upper center, lens poking through.
-- Printer in the **lower half**, with its paper slot on the **top face** so stickers come out the top like an instant camera. Rotate the printer so its front slot faces up.
-- P4 board sandwiched behind the display.
-- 12 V jack and USB-C on a side face.
+**B — "Label maker" (landscape).** X4 in landscape on the front face. The printer sits behind it with the paper slot pointing **up**. Electronics go in the side bay next to the printer, using the X4's extra length (114 vs 82). Target outer size ≈ **120 × 72 × 78 mm**.
 
-Store each part's position and rotation in a `LAYOUT` object so I can tweak it. Add a **"Layout B: desk unit"** preset: printer flat on the bottom with the paper out the front, display angled on top, camera on top of the display.
+For both presets:
+- The X4 sits in a **removable dock pocket**. It slides in from the top or side and is held by a 1.5 mm lip around the bezel, so it can still be used as an e-reader.
+- Leave its USB-C port, microSD slot and buttons reachable through cutouts.
+- Leave a 1 mm gap around the X4 for print tolerance.
 
 ## Enclosure
 
-- Auto-size a rounded box around all parts, with a configurable wall thickness (default 2.5 mm) and an internal clearance (default 3 mm).
-- Show the **outer dimensions live** in the UI, so I see the device size.
-- Material: translucent (`MeshPhysicalMaterial`, transmission/opacity slider), with a toggle between solid, translucent and hidden.
-- Cut-outs, shown as outlined openings: display window, camera lens hole, paper exit slot (60 × 3 mm), USB-C, DC jack, button holes.
-- Collision check: highlight any part that intersects another part or the enclosure wall in red, using `Box3` intersection.
+- Auto-size a rounded box around all parts, with a configurable wall thickness (default 2.5 mm), internal clearance (default 2 mm) and corner radius (default 6 mm).
+- Show **live outer dimensions** in the UI.
+- Split the box into a **front shell** (holding the X4 pocket) and a **back shell** (printer cradle and electronics bay). An exploded view separates them.
+- Material: translucent `MeshPhysicalMaterial`, with toggles for solid, translucent and hidden. The X4 pocket is a separately colored part.
+- Cutouts, shown as outlined openings:
+  - X4 screen window (shows the full active area)
+  - paper exit slot (**60 × 3 mm**) with a **tear bar**: a thin serrated edge just outside the slot
+  - printer paper door access: a hinged lid on the back shell, so the 30 mm roll can be swapped
+  - PD USB-C port, X4 USB-C, X4 microSD, X4 buttons
+  - optional camera lens hole and feed button
+- Collision check: highlight any part that intersects another part or a shell wall in red, using `Box3`.
 
 ## Features
 
-1. **OrbitControls** with damping. Camera presets: Front, Back, Top, Iso, and "User's view" (looking at the display).
-2. **Exploded-view slider** (0–100%): parts move outward along their layout offset vectors, and the wires stretch with them (recompute the tube curves).
-3. **Click to select:** highlight the part with an outline/emissive tint and open a side panel with its name, dimensions, verified badge, notes and source link.
+1. **OrbitControls** with damping. Camera presets: Front, Back, Top, Iso, "In hand" (slight tilt, as if held).
+2. **Exploded-view slider** (0–100%): the shells and parts move apart along their layout offset vectors, and the wires re-route with them.
+3. **Click to select** a part: outline highlight plus a side panel with its name, dimensions, verified badge, notes and source link.
 4. **Hover labels** using `CSS2DRenderer`.
-5. **Dimension mode:** draw measurement lines with mm labels on the selected part's bounding box and on the overall enclosure.
-6. **Print animation button:**
-   - Generate a 384 × 384 test image on a 2D canvas (a simple face or a gradient).
-   - Apply **Floyd–Steinberg dithering** in JS.
-   - Use the result as a `CanvasTexture`, so the texture is 1-bit black/white with nearest-neighbor filtering.
-   - Feed a paper plane out of the printer slot over about 2 s at true scale. 384 px = **48 mm** printed width on 57 mm paper, at 8 px/mm, so a 384-px-tall image is 48 mm tall.
-   - Optional: let me drop or upload my own image to dither and "print".
-7. **Gesture demo strip:** three buttons (✌️ 👍 ✋) that run the state machine visually. ✌️ shows a 3-2-1 countdown on the display mesh (CanvasTexture), then a "flash"; 👍 runs the print animation; ✋ clears the display.
-8. **Camera frustum toggle** showing the IMX500's FOV (72° H × 56° V) out to about 1 m, so I can judge framing for selfie-distance gestures.
-9. **Export:** a button to download the current `LAYOUT` + `PARTS` as JSON, and one to export the scene as **GLB** (`GLTFExporter`) for importing into CAD or slicer tools.
+5. **Dimension mode:** mm measurement lines on the selected part and the overall enclosure.
+6. **Simulated X4 sticker UI:** draw on the X4 screen texture with canvas 2D, in pure black/white with nearest-neighbor filtering.
+   - A sticker list with a few generated presets: "Date stamp", "Habit grid 7×5", "Mood: ☐☐☐☐☐", "Today I…" with ruled lines, a heart doodle.
+   - **Up / Down / Print** buttons in the UI, standing in for the X4's page buttons.
+   - The preview shows the selected sticker at true scale (384 px over 44 mm on screen).
+   - Optional: drop in your own image, then resize to 384 wide, **Floyd–Steinberg dither** in JS, and add it to the list.
+7. **Print animation:** on Print, the ESP-NOW arc pulses, then a paper strip with the same 1-bit texture feeds out of the top slot over about 2 s, at true scale (8 px/mm, so 384 px = 48 mm).
+8. **Export:**
+   - `LAYOUT` + `PARTS` as JSON
+   - the whole scene as **GLB** (`GLTFExporter`)
+   - **each enclosure shell separately as GLB/STL** (`STLExporter`), so I can start the 3D-printed case from them
 
 ## Visual style
 
-- Clean product-render look: `RoomEnvironment` + PMREM for reflections, soft shadows on a ground plane, subtle grid with 10 mm cells.
+- Clean product-render look: `RoomEnvironment` + PMREM, soft shadows on a ground plane, 10 mm grid.
 - Colors:
-  - PCBs: green, or black for the camera board.
-  - Printer: dark gray plastic.
-  - Paper: off-white.
-  - Lens: black glass.
-- Light and dark UI themes that follow `prefers-color-scheme`. The UI panel is overlaid, collapsible, and usable on a phone. Touch orbit/pinch must work.
+  - X4 body: white or black (toggle).
+  - Screen: paper-white e-ink texture.
+  - Printer: dark gray.
+  - PCBs: green or black.
+  - Sticker paper: off-white.
+- Light and dark UI themes that follow `prefers-color-scheme`. A collapsible overlay panel. Works on a phone with touch orbit/pinch.
 
 ## Acceptance criteria
 
 - [ ] Opens from a local file or static host with no build step and no console errors.
 - [ ] All parts at true mm scale; unverified dimensions visibly flagged.
-- [ ] Changing the display size or layout preset updates the enclosure size and the dimension readout.
-- [ ] Exploded view keeps the wires attached.
-- [ ] The print animation shows a properly dithered 1-bit image at 48 mm width.
-- [ ] Collision highlighting works when I move a part into another.
-- [ ] GLB and JSON export both download.
+- [ ] Switching layout preset A/B updates the enclosure and its dimension readout.
+- [ ] Exploded view keeps the wires attached and separates the front and back shells.
+- [ ] The simulated X4 UI scrolls the presets, and Print produces a correctly dithered 48 mm-wide strip from the top slot.
+- [ ] Collision highlighting works.
+- [ ] JSON, scene GLB and per-shell STL exports all download.
 
 ## Out of scope
 
-Real firmware, exact connector pinouts and photorealistic CAD. Primitives are fine; the `modelUrl` swap is the path to real models later.
+The real X4 firmware, the ESP-NOW protocol implementation, exact connector pinouts and photorealistic CAD.
 
-## Sources for the verified numbers
+## Sources
 
+- Xteink X4 specs (114 × 69 × 5.9 mm, 77 g, 650 mAh, microSD, USB-C): https://pocketink.io/devices/x4/
+- CrossPoint Reader firmware: https://github.com/ivancernja/crosspoint-reader
 - DFR0503: https://www.dfrobot.com/product-1799.html and https://wiki.dfrobot.com/dfr0503-en
-- Arducam IMX500 for MCU (B0642) datasheet: https://cdn.arducam.com/wp-content/uploads/2026/04/Arducam_B0642_IMX500_AI_Camera_for_MCU_Datasheet.pdf
-- Waveshare ESP32-P4-WIFI6: https://www.waveshare.com/esp32-p4-wifi6.htm and https://docs.waveshare.com/ESP32-P4-WIFI6
-- Arducam SDK (for SPI/I2C GPIO numbers): https://github.com/ArduCAM/imx500-mcu-sdk
+- XIAO ESP32S3 Sense: https://wiki.seeedstudio.com/xiao_esp32s3_getting_started/
