@@ -1,8 +1,9 @@
 /*
- * Thermal Printer Invoice System for ESP32
+ * Thermal Printer Invoice System for the Seeed Studio XIAO ESP32S3 Sense
  * 
  * Author: Rithik Krisna M
  * Date: August/2025
+ * Updated: October/2026 - ported to the XIAO ESP32S3 Sense (ESP32-S3R8)
  * 
  * Purpose:
  * This code implements a complete invoice printing system for thermal printers using ESP32.
@@ -41,7 +42,8 @@
  *    - Paper cutting commands
  * 
  * Hardware Connections:
- * - Thermal printer connected via UART2 (pins 16/RXD2, 17/TXD2)
+ * - Thermal printer connected via UART1: XIAO D6 (GPIO43, TX) -> printer RX,
+ *   XIAO D7 (GPIO44, RX) <- printer TX (optional), shared GND
  * - Uses standard ESC/POS commands for printer control
  * 
  * Serial Commands:
@@ -52,9 +54,10 @@
  * status  - Show current invoice status
  */
 
-#define RXD2 16  // UART2 RX pin for printer communication
-#define TXD2 17  // UART2 TX pin for printer communication
-HardwareSerial printerSerial(2);  // Use UART2 for printer communication
+#define PRINTER_RX 44  // D7 - UART1 RX (from printer TX, optional)
+#define PRINTER_TX 43  // D6 - UART1 TX (to printer RX)
+#define PRINTER_BAUD 9600  // Check your printer's self-test page if output is garbled
+HardwareSerial printerSerial(1);  // Serial is native USB on the XIAO, so UART1 drives the printer
 
 // Company logo bitmap data (200x56 pixels)
 const unsigned char circuitDigestSmall [] PROGMEM = { 
@@ -112,7 +115,8 @@ Invoice currentInvoice;
 
 void setup() {
   Serial.begin(115200);
-  printerSerial.begin(9600, SERIAL_8N1, RXD2, TXD2);
+  while (!Serial && millis() < 3000) delay(10);  // Wait briefly for the USB serial monitor
+  printerSerial.begin(PRINTER_BAUD, SERIAL_8N1, PRINTER_RX, PRINTER_TX);
   
   delay(1000);
   
@@ -742,4 +746,4 @@ void printBitmapGS_Method(const unsigned char* progmemData, int width, int heigh
       }
     }
   }
-}
+}
